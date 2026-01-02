@@ -6,6 +6,9 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional
 
+import docker
+from docker.types import DeviceRequest
+
 
 def _run(cmd: List[str], cwd: Optional[Path] = None, check: bool = True) -> subprocess.CompletedProcess:
     """Run a shell command with basic logging."""
@@ -43,19 +46,34 @@ def build_docker_cosmos(
     if not dockerfile_path.exists():
         raise FileNotFoundError(f"Dockerfile not found: {dockerfile_path}")
 
-    build_cmd = ["docker", "build", "-f", str(dockerfile_path), "-t", tag]
-    if platform:
-        build_cmd.extend(["--platform", platform])
-    else:
-        # Best-effort host arch mapping
+    # Resolve platform
+    if not platform:
         import platform as _p
         m = _p.machine()
         if m in ("x86_64", "amd64"):
-            build_cmd.extend(["--platform", "linux/amd64"])
+            platform = "linux/amd64"
         elif m in ("aarch64", "arm64"):
-            build_cmd.extend(["--platform", "linux/arm64"])
-    build_cmd.append(".")
-    _run(build_cmd, cwd=repo_dir)
+            platform = "linux/arm64"
+
+    print(f"[fixerpy] Building image '{tag}' (platform={platform}) from {dockerfile_path}")
+    client = docker.from_env()
+    # Use low-level API to pass platform reliably
+    api = client.api
+    build_stream = api.build(
+        path=str(repo_dir),
+        dockerfile=str(dockerfile_path.relative_to(repo_dir)),
+        tag=tag,
+        platform=platform,
+        decode=True,
+        pull=False,
+    )
+    for chunk in build_stream:
+        if 'stream' in chunk:
+            line = chunk['stream'].strip()
+            if line:
+                print(line)
+        elif 'error' in chunk:
+            raise RuntimeError(f"Docker build error: {chunk['error']}")
 
 
 def download_weights(repo_dir: Path, local_dir: str = "models") -> Path:
@@ -95,30 +113,40 @@ def run_docker_container(
     input_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    docker_cmd = [
-        "docker",
-        "run",
-        "--rm",
-        "-v",
-        f"{repo_dir}:/work",
-        "-v",
-        f"{input_dir}:/work/input",
-        "-v",
-        f"{output_dir}:/work/output",
-        "-w",
-        "/work",
-        "--ipc=host",
-    ]
+    volumes = {
+        str(repo_dir): {"bind": "/work", "mode": "rw"},
+        str(input_dir): {"bind": "/work/input", "mode": "rw"},
+        str(output_dir): {"bind": "/work/output", "mode": "rw"},
+    }
+
+    device_requests = None
     if use_gpus:
-        docker_cmd.extend(["--gpus", "all"])
-    if extra_args:
-        docker_cmd.extend(extra_args)
+        device_requests = [DeviceRequest(count=-1, capabilities=[["gpu"]])]
 
-    docker_cmd.append(tag)
-
-    # Default command: open a bash shell, so users can run README steps inside.
-    docker_cmd.extend(command or ["bash"])
-    _run(docker_cmd)
+    client = docker.from_env()
+    cmd = command or ["bash"]
+    # extra_args are not directly supported in SDK; ignore or extend as needed.
+    print(f"[fixerpy] Running container '{tag}' with command: {' '.join(cmd)}")
+    container = client.containers.run(
+        image=tag,
+        command=cmd,
+        volumes=volumes,
+        working_dir="/work",
+        ipc_mode="host",
+        remove=True,
+        detach=True,
+        device_requests=device_requests,
+    )
+    # Stream logs until exit
+    for line in container.logs(stream=True):
+        try:
+            print(line.decode().rstrip())
+        except Exception:
+            print(str(line).rstrip())
+    result = container.wait()
+    status_code = result.get('StatusCode', 0)
+    if status_code != 0:
+        raise RuntimeError(f"Container exited with status {status_code}")
 
 
 def run_inference_container(
@@ -146,21 +174,17 @@ def run_inference_container(
     in_dir.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    cmd = [
-        "docker", "run", "--rm",
-        "-v", f"{repo_dir}:/work",
-        "-v", f"{in_dir}:/work/input",
-        "-v", f"{out_dir}:/work/output",
-        "-w", "/work",
-        "--ipc=host",
-    ]
-    if use_gpus:
-        cmd.extend(["--gpus", "all"])
-    if extra_args:
-        cmd.extend(extra_args)
-    cmd.append(tag)
+    volumes = {
+        str(repo_dir): {"bind": "/work", "mode": "rw"},
+        str(in_dir): {"bind": "/work/input", "mode": "rw"},
+        str(out_dir): {"bind": "/work/output", "mode": "rw"},
+    }
 
-    infer = [
+    device_requests = None
+    if use_gpus:
+        device_requests = [DeviceRequest(count=-1, capabilities=[["gpu"]])]
+
+    cmd = [
         "python3", "/work/src/inference_pretrained_model.py",
         "--model", "/work/models/pretrained/pretrained_fixer.pkl",
         "--input", "/work/input",
@@ -169,10 +193,29 @@ def run_inference_container(
         "--batch-size", str(batch_size),
     ]
     if test_speed:
-        infer.append("--test-speed")
+        cmd.append("--test-speed")
 
-    cmd.extend(infer)
-    _run(cmd)
+    client = docker.from_env()
+    print(f"[fixerpy] Running inference in container '{tag}'")
+    container = client.containers.run(
+        image=tag,
+        command=cmd,
+        volumes=volumes,
+        working_dir="/work",
+        ipc_mode="host",
+        remove=True,
+        detach=True,
+        device_requests=device_requests,
+    )
+    for line in container.logs(stream=True):
+        try:
+            print(line.decode().rstrip())
+        except Exception:
+            print(str(line).rstrip())
+    result = container.wait()
+    status_code = result.get('StatusCode', 0)
+    if status_code != 0:
+        raise RuntimeError(f"Container exited with status {status_code}")
 
 
 def setup_and_run(
