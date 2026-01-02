@@ -10,7 +10,9 @@ import docker
 from docker.types import DeviceRequest
 
 
-def _run(cmd: List[str], cwd: Optional[Path] = None, check: bool = True) -> subprocess.CompletedProcess:
+def _run(
+    cmd: List[str], cwd: Optional[Path] = None, check: bool = True
+) -> subprocess.CompletedProcess:
     """Run a shell command with basic logging."""
     print("[fixerpy] $", " ".join(cmd))
     return subprocess.run(cmd, cwd=str(cwd) if cwd else None, check=check)
@@ -49,13 +51,16 @@ def build_docker_cosmos(
     # Resolve platform
     if not platform:
         import platform as _p
+
         m = _p.machine()
         if m in ("x86_64", "amd64"):
             platform = "linux/amd64"
         elif m in ("aarch64", "arm64"):
             platform = "linux/arm64"
 
-    print(f"[fixerpy] Building image '{tag}' (platform={platform}) from {dockerfile_path}")
+    print(
+        f"[fixerpy] Building image '{tag}' (platform={platform}) from {dockerfile_path}"
+    )
     client = docker.from_env()
     # Use low-level API to pass platform reliably
     api = client.api
@@ -68,11 +73,11 @@ def build_docker_cosmos(
         pull=False,
     )
     for chunk in build_stream:
-        if 'stream' in chunk:
-            line = chunk['stream'].strip()
+        if "stream" in chunk:
+            line = chunk["stream"].strip()
             if line:
                 print(line)
-        elif 'error' in chunk:
+        elif "error" in chunk:
             raise RuntimeError(f"Docker build error: {chunk['error']}")
 
 
@@ -144,7 +149,7 @@ def run_docker_container(
         except Exception:
             print(str(line).rstrip())
     result = container.wait()
-    status_code = result.get('StatusCode', 0)
+    status_code = result.get("StatusCode", 0)
     if status_code != 0:
         raise RuntimeError(f"Container exited with status {status_code}")
 
@@ -185,12 +190,18 @@ def run_inference_container(
         device_requests = [DeviceRequest(count=-1, capabilities=[["gpu"]])]
 
     cmd = [
-        "python3", "/work/src/inference_pretrained_model.py",
-        "--model", "/work/models/pretrained/pretrained_fixer.pkl",
-        "--input", "/work/input",
-        "--output", "/work/output",
-        "--timestep", str(timestep),
-        "--batch-size", str(batch_size),
+        "python3",
+        "/work/src/inference_pretrained_model.py",
+        "--model",
+        "/work/models/pretrained/pretrained_fixer.pkl",
+        "--input",
+        "/work/input",
+        "--output",
+        "/work/output",
+        "--timestep",
+        str(timestep),
+        "--batch-size",
+        str(batch_size),
     ]
     if test_speed:
         cmd.append("--test-speed")
@@ -213,7 +224,7 @@ def run_inference_container(
         except Exception:
             print(str(line).rstrip())
     result = container.wait()
-    status_code = result.get('StatusCode', 0)
+    status_code = result.get("StatusCode", 0)
     if status_code != 0:
         raise RuntimeError(f"Container exited with status {status_code}")
 
