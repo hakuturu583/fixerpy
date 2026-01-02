@@ -13,12 +13,12 @@ Details
   - Downloads model weights via `hf download nvidia/Fixer --local-dir models` into the cloned repo
   - Runs the container per Fixer README, mounting the repo to `/work` and invoking the inference script on example images:
     - `python /work/src/inference_pretrained_model.py --model /work/models/pretrained/pretrained_fixer.pkl --input /work/input --output /work/output --timestep 250`
-  - Outputs are saved to `.fixer_work/output`
+  - Outputs are saved to `./output` (relative to current working directory)
 
 CLI options
 - `--dest-root PATH`: Working directory (default: `.fixer_work`)
 - `--input PATH`: Input directory (default: `<dest-root>/Fixer/examples`)
-- `--output PATH`: Output directory (default: `<dest-root>/output`)
+- `--output PATH`: Output directory (default: `./output`)
 - `--timestep INT`: Inference timestep (default: `250`)
 - `--batch-size INT`: Batch size (default: `1`)
 - `--test-speed`: Run speed benchmark before inference

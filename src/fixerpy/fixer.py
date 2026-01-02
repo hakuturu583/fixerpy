@@ -177,7 +177,8 @@ def run_inference_container(
     """
     repo_dir = Path(repo_dir).expanduser().resolve()
     in_dir = Path(input_dir) if input_dir else repo_dir / "examples"
-    out_dir = Path(output_dir) if output_dir else repo_dir.parent / "output"
+    # Default output to ./output from the current working directory
+    out_dir = Path(output_dir) if output_dir else Path.cwd() / "output"
     in_dir = in_dir.expanduser().resolve()
     out_dir = out_dir.expanduser().resolve()
     in_dir.mkdir(parents=True, exist_ok=True)

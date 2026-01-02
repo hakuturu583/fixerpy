@@ -52,7 +52,8 @@ def main() -> None:
     dest_root: Path = args.dest_root
     default_input = dest_root / "Fixer" / "examples"
     input_dir: Path | None = args.input if args.input else default_input
-    output_dir: Path | None = args.output if args.output else (dest_root / "output")
+    # Default output to ./output under current working directory
+    output_dir: Path | None = args.output if args.output else (Path.cwd() / "output")
 
     setup_and_infer(
         dest_root=dest_root,
