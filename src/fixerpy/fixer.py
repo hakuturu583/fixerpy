@@ -204,7 +204,7 @@ def run_inference_container(
         "/work/output",
         "--timestep",
         str(timestep),
-        "--batch-size",
+        "--batch_size",
         str(batch_size),
     ]
     if test_speed:
