@@ -23,12 +23,15 @@ CLI options
 - `--batch-size INT`: Batch size (default: `1`)
 - `--test-speed`: Run speed benchmark before inference
 - `--no-gpus`: Disable GPU pass-through for the container
+- `--platform linux/amd64|linux/arm64`: Build target platform (auto-detected by default)
 
 Examples
 - Run with defaults (examples → output):
   - `uv run fixer`
 - Run with custom input/output:
   - `uv run fixer --input /path/to/images --output /path/to/out --timestep 250`
+- Force platform (for cross-arch hosts or when needed):
+  - `uv run fixer --platform linux/amd64`
 
 Notes
 - This project uses Docker and the Fixer README’s recommended `/work` mount layout.

@@ -31,14 +31,31 @@ def clone_fixer_repo(dest_root: Path) -> Path:
     return repo_dir
 
 
-def build_docker_cosmos(repo_dir: Path, tag: str = "fixer-cosmos-env", dockerfile: str = "Dockerfile.cosmos") -> None:
+def build_docker_cosmos(
+    repo_dir: Path,
+    tag: str = "fixer-cosmos-env",
+    dockerfile: str = "Dockerfile.cosmos",
+    platform: str | None = None,
+) -> None:
     """Build Fixer Docker image from Dockerfile.cosmos."""
     repo_dir = Path(repo_dir).expanduser().resolve()
     dockerfile_path = repo_dir / dockerfile
     if not dockerfile_path.exists():
         raise FileNotFoundError(f"Dockerfile not found: {dockerfile_path}")
 
-    _run(["docker", "build", "-f", str(dockerfile_path), "-t", tag, "."], cwd=repo_dir)
+    build_cmd = ["docker", "build", "-f", str(dockerfile_path), "-t", tag]
+    if platform:
+        build_cmd.extend(["--platform", platform])
+    else:
+        # Best-effort host arch mapping
+        import platform as _p
+        m = _p.machine()
+        if m in ("x86_64", "amd64"):
+            build_cmd.extend(["--platform", "linux/amd64"])
+        elif m in ("aarch64", "arm64"):
+            build_cmd.extend(["--platform", "linux/arm64"])
+    build_cmd.append(".")
+    _run(build_cmd, cwd=repo_dir)
 
 
 def download_weights(repo_dir: Path, local_dir: str = "models") -> Path:
@@ -124,6 +141,8 @@ def run_inference_container(
     repo_dir = Path(repo_dir).expanduser().resolve()
     in_dir = Path(input_dir) if input_dir else repo_dir / "examples"
     out_dir = Path(output_dir) if output_dir else repo_dir.parent / "output"
+    in_dir = in_dir.expanduser().resolve()
+    out_dir = out_dir.expanduser().resolve()
     in_dir.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -142,7 +161,7 @@ def run_inference_container(
     cmd.append(tag)
 
     infer = [
-        "python", "/work/src/inference_pretrained_model.py",
+        "python3", "/work/src/inference_pretrained_model.py",
         "--model", "/work/models/pretrained/pretrained_fixer.pkl",
         "--input", "/work/input",
         "--output", "/work/output",
@@ -197,11 +216,12 @@ def setup_and_infer(
     test_speed: bool = False,
     use_gpus: bool = True,
     extra_docker_args: Optional[List[str]] = None,
+    platform: str | None = None,
 ) -> None:
     """Clone -> build -> download weights -> run inference in container per README."""
     dest_root = Path(dest_root)
     repo_dir = clone_fixer_repo(dest_root)
-    build_docker_cosmos(repo_dir, tag=tag)
+    build_docker_cosmos(repo_dir, tag=tag, platform=platform)
     download_weights(repo_dir, local_dir="models")
     run_inference_container(
         repo_dir=repo_dir,

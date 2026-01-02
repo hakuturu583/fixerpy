@@ -40,6 +40,12 @@ def main() -> None:
         action="store_true",
         help="Run speed benchmark before inference",
     )
+    parser.add_argument(
+        "--platform",
+        type=str,
+        default=None,
+        help="Docker build platform (e.g., linux/amd64, linux/arm64). If omitted, auto-detects host.",
+    )
 
     args = parser.parse_args()
 
@@ -56,9 +62,9 @@ def main() -> None:
         batch_size=args.batch_size,
         test_speed=args.test_speed,
         use_gpus=not args.no_gpus,
+        platform=args.platform,
     )
 
 
 if __name__ == "__main__":
     main()
-
