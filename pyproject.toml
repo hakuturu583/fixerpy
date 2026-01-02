@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "docker>=7.1.0",
     "gitpython>=3.1.46",
+    "huggingface-hub[cli]>=1.2.3",
 ]
 
 [build-system]
