@@ -13,6 +13,9 @@ dependencies = [
     "huggingface-hub[cli]>=1.2.3",
 ]
 
+[project.scripts]
+fixer = "fixerpy.cli:main"
+
 [build-system]
 requires = ["uv_build>=0.9.7,<0.10.0"]
 build-backend = "uv_build"
