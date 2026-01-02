@@ -129,7 +129,11 @@ def run_docker_container(
         device_requests = [DeviceRequest(count=-1, capabilities=[["gpu"]])]
 
     client = docker.from_env()
-    cmd = command or ["bash"]
+    # Image has ENTRYPOINT ["/bin/bash"]. To run commands, pass ['-lc', '<cmd>'].
+    if command is None:
+        cmd = ["-lc", "bash"]
+    else:
+        cmd = ["-lc", " ".join(command)]
     # extra_args are not directly supported in SDK; ignore or extend as needed.
     print(f"[fixerpy] Running container '{tag}' with command: {' '.join(cmd)}")
     container = client.containers.run(
@@ -189,7 +193,7 @@ def run_inference_container(
     if use_gpus:
         device_requests = [DeviceRequest(count=-1, capabilities=[["gpu"]])]
 
-    cmd = [
+    cmd_parts = [
         "python3",
         "/work/src/inference_pretrained_model.py",
         "--model",
@@ -204,7 +208,9 @@ def run_inference_container(
         str(batch_size),
     ]
     if test_speed:
-        cmd.append("--test-speed")
+        cmd_parts.append("--test-speed")
+    # Use bash -lc to execute the command string due to ENTRYPOINT ["/bin/bash"]
+    cmd = ["-lc", " ".join(cmd_parts)]
 
     client = docker.from_env()
     print(f"[fixerpy] Running inference in container '{tag}'")
